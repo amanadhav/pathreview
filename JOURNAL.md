@@ -28,9 +28,9 @@ This affects the test harness (`tests/conftest.py`) and the logging setup in
 
 **Branch name:** test/159-structlog-caplog-propagation
 
-**Setup confirmation:** [ ] App runs locally at localhost:5173
+**Setup confirmation:** [x] App runs locally at localhost:5173
 
-**Cohort ledger:** [ ] Issue added to cohort ledger
+**Cohort ledger:** [x] Issue added to cohort ledger
 
 ---
 
