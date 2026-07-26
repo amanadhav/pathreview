@@ -55,7 +55,7 @@ This affects the test harness (`tests/conftest.py`) and the logging setup in
 
 ## Week 8 — Reproduction & solution planning
 
-**Reproduction commit link:** https://github.com/amanadhav/pathreview/commit/REPRO_COMMIT_SHA
+**Reproduction commit link:** https://github.com/amanadhav/pathreview/commit/247ed55
 
 **Reproduction summary:** Ran the unit test
 `tests/unit/test_batch_processor.py::TestBatchEmbeddingProcessor::test_empty_chunks_list_returns_empty -q`
