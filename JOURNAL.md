@@ -51,3 +51,38 @@ This affects the test harness (`tests/conftest.py`) and the logging setup in
   unrelated to #159 and out of scope here.)
 - **Clear definition of done:** caplog-based assertions capture structlog events and
   the previously failing test passes, with no regressions elsewhere.
+---
+
+## Week 8 — Reproduction & solution planning
+
+**Reproduction commit link:** https://github.com/amanadhav/pathreview/commit/REPRO_COMMIT_SHA
+
+**Reproduction summary:** Ran the unit test
+`tests/unit/test_batch_processor.py::TestBatchEmbeddingProcessor::test_empty_chunks_list_returns_empty -q`
+against mocks (no Docker needed). It failed with `assert ('Empty chunks list' in '' or False)`
+— `caplog.text`/`caplog.records` were empty — while the exact warning
+("Empty chunks list provided to BatchEmbeddingProcessor") still appeared under pytest's
+"Captured stdout call", confirming structlog's default `PrintLoggerFactory` bypasses stdlib
+logging so `caplog` never sees the record.
+
+**PLAN.md link:** https://github.com/amanadhav/pathreview/blob/test/159-structlog-caplog-propagation/PLAN.md
+
+**Walkthrough video (recommended):** _(not recorded yet)_
+
+**Blockers or open questions:** Two design questions for the fix (documented in PLAN.md):
+whether to reuse `core/logging.py`'s `configure_logging()` or write a dedicated test config
+in `conftest.py`, and how to handle `cache_logger_on_first_use` given `batch_processor.py`
+binds its logger at import time. Also need to inventory which existing tests assert on which
+log levels so caplog's capture level is set correctly.
+
+### Reproduction steps (detailed)
+
+1. `docker compose up -d` (only `db` and `redis` are needed; `vector-db` crashes for an
+   unrelated chroma/numpy reason documented in PLAN.md — not required for this issue).
+2. Create the venv and install deps: `python -m venv .venv` then
+   `.venv/Scripts/pip install -e ".[dev]"`.
+3. Run the failing test:
+   ```
+   pytest tests/unit/test_batch_processor.py::TestBatchEmbeddingProcessor::test_empty_chunks_list_returns_empty -q
+   ```
+4. Observe: assertion fails on empty `caplog.text`, while the log line is visible on stdout.
