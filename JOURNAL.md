@@ -86,3 +86,38 @@ log levels so caplog's capture level is set correctly.
    pytest tests/unit/test_batch_processor.py::TestBatchEmbeddingProcessor::test_empty_chunks_list_returns_empty -q
    ```
 4. Observe: assertion fails on empty `caplog.text`, while the log line is visible on stdout.
+
+---
+
+## Week 9 — Solution building & PR submission
+
+### Check-in 1 (mid-week)
+
+**Current progress:** Completed the substantive `PLAN.md` subtasks: added the RED regression test proving the stdout-only failure, added import-time structlog configuration in `tests/conftest.py`, and completed focused canonical verification of both the new routing contract and the unchanged batch-processor warning contract.
+
+**Next steps:** Run broad validation, request peer/mentor review, and complete final PR follow-up.
+
+**Blockers:** None for #159. The repository has unrelated pre-existing unit, lint, formatting, and type-check baselines; these are tracked separately and do not block the focused logging fix.
+
+### Check-in 2 (end of week)
+
+**PR link:** https://github.com/ascherj/pathreview/pull/596
+
+**Branch:** `test/159-structlog-caplog-propagation`
+
+**What you built:** Added test-only structlog routing through Python's standard-library logging so pytest `caplog` receives emitted records. Configuration runs when `tests/conftest.py` is imported—before test modules bind loggers—and disables first-use caching so import-time lazy loggers resolve the active test configuration without changing production logging.
+
+**Tests added or updated:** Added `tests/unit/test_logging_config.py`, which creates an import-time logger and verifies that one INFO `LogRecord` contains both the event and its structured field. The canonical `tests/unit/test_batch_processor.py::TestBatchEmbeddingProcessor::test_empty_chunks_list_returns_empty` test remains unchanged and still asserts the empty-list warning while returning an empty list.
+
+**Self-review confirmation:**
+
+- [x] make check passes
+- [x] make test-unit passes
+
+Per the course's pre-existing-failure rule, GNU Make was unavailable in this Windows shell, so equivalent commands were run instead. The changed files and focused tests pass, and comparison/baseline verification shows no new failures: the focused run reports 12 passed; the full unit run reports 377 passed and 52 pre-existing failures; full Ruff reports 182 pre-existing errors; Black reports 52 pre-existing files needing formatting; and Mypy reports 19 pre-existing errors in 11 files. The changed Python files pass Ruff, Black `--check`, focused Mypy, and diagnostics.
+
+**Draft PR feedback received from:** `none` — the user opened the ready-for-review PR manually after tooling authentication failed.
+
+**Implementation commit:** https://github.com/amanadhav/pathreview/commit/d9b0f1086ed9b78a1276684c73cb2f644ace1db2
+
+**RED/GREEN evidence:** Before the shared conftest configuration, `tests/unit/test_logging_config.py` failed with `assert 0 == 1`: no matching `caplog` record was captured and the event appeared on stdout. After import-time stdlib routing was added, that test passed, the unchanged canonical empty-list warning test passed, and the combined focused verification completed with 12 passed.
