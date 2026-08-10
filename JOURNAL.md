@@ -121,3 +121,112 @@ Per the course's pre-existing-failure rule, GNU Make was unavailable in this Win
 **Implementation commit:** https://github.com/amanadhav/pathreview/commit/d9b0f1086ed9b78a1276684c73cb2f644ace1db2
 
 **RED/GREEN evidence:** Before the shared conftest configuration, `tests/unit/test_logging_config.py` failed with `assert 0 == 1`: no matching `caplog` record was captured and the event appeared on stdout. After import-time stdlib routing was added, that test passed, the unchanged canonical empty-list warning test passed, and the combined focused verification completed with 12 passed.
+
+---
+
+## Week 10 — Iteration & reflection
+
+### Reviewer feedback
+
+**Feedback received:** [ ] Yes  [x] No — still awaiting review
+
+**Summary of feedback:** No review arrived. PR
+[ascherj/pathreview#596](https://github.com/ascherj/pathreview/pull/596)
+("test: route structlog logs through pytest caplog") is still open against
+`ascherj:main` with zero issue comments, zero review comments, and no reviewers
+assigned as of the end of Week 10. Checked the PR page and the GitHub API
+(`comments: 0`, `review_comments: 0`, `requested_reviewers: []`, `state: open`)
+to confirm. Per the Summer 2026 note, reviewer feedback is not part of this
+term's workflow, so this is the expected outcome rather than a stalled PR.
+
+**How you responded:** No reviewer changes to make. I used the week to
+self-review instead: re-read the diff on
+`test/159-structlog-caplog-propagation` (5 files, +650/-0), re-ran the focused
+verification (12 passed) to confirm the branch is still green, and confirmed the
+head commit `41d16ad` on the PR matches my local branch tip so a reviewer
+arriving late would see the finished work. The one gap I found and noted for
+myself is that the PR body is still the repo's unfilled template — the
+`Closes #159` line and the Changes/Notes sections were never filled in when I
+opened the PR manually after the CLI auth failure. If review does come in, my
+first action is to rewrite that description before replying to anything else.
+
+---
+
+### Reflection
+
+**What was harder than you expected?**
+The hardest part was not the fix — it was proving what the fix actually did. The
+final change to `tests/conftest.py` is about twenty lines, but getting there
+meant understanding *ordering*: `ingestion/embeddings/batch_processor.py` binds
+its logger at module import time via `structlog.get_logger()`, so anything I
+configured inside a pytest fixture ran too late to matter. That's why the
+`structlog.configure()` call sits at module level in `conftest.py` and why
+`cache_logger_on_first_use=False` is not optional — with caching on, the
+import-time lazy proxy would freeze structlog's default `PrintLoggerFactory` and
+`caplog` would stay empty no matter what the fixture did. I lost real time
+believing my fix was wrong when it was actually correct but running in the wrong
+order. Separating "the code is wrong" from "the code ran at the wrong moment"
+was the actual skill this issue taught me.
+
+**What did you learn about working in a large codebase?**
+That a red test does not mean you broke something. The first time I ran the full
+unit suite I saw 52 failures and assumed I had caused a disaster; they were
+pre-existing, and so were the 182 Ruff errors, 52 Black-unformatted files, and
+19 Mypy errors in 11 files. In my own projects a clean baseline is a reasonable
+assumption. Here I had to learn to *measure* the baseline first, then prove my
+change added nothing to it — which is a completely different verification habit
+than "does the suite pass." I also learned to say no to adjacent breakage: the
+`chromadb/chroma:0.4.22` container crashes on startup because of a NumPy 2.0
+incompatibility, and it was genuinely tempting to fix it since it was blocking
+my `docker compose up`. It had nothing to do with #159, so I documented it in
+PLAN.md as out of scope and moved on with mocks instead. Scope discipline felt
+like giving up in the moment and was clearly the right call in hindsight.
+
+**How did AI tools help — and where did they fall short?**
+AI was strongest at orientation and at mechanical breadth. It got me from "the
+issue mentions structlog and caplog" to the right two files
+(`core/logging.py::configure_logging()` and `tests/conftest.py`) far faster than
+grepping would have, and it explained *why* `caplog` can't see structlog output
+— that caplog only observes stdlib `logging` handlers — which was the conceptual
+key to the whole issue. It was also useful for the grind: running the Windows
+equivalents of `make check` / `make test-unit` when GNU Make wasn't available in
+my shell, and diffing baseline failure counts against post-change counts.
+
+Where it fell short was the ordering problem above. Early suggestions had me
+configuring structlog inside a fixture, which is the textbook answer and is
+wrong for this specific repo because of the import-time logger binding in
+`batch_processor.py` — that's repo-specific knowledge no general answer had.
+It also could not decide for me whether to reuse `configure_logging()` or write
+a dedicated test-only config; reusing production config would have coupled the
+tests to env-dependent rendering, and I only saw that tradeoff by reading
+`core/logging.py` myself. And when I was staring at an empty `caplog.text`, AI
+happily proposed plausible next edits rather than telling me to prove the
+mechanism first. Writing the RED probe test
+(`tests/unit/test_logging_config.py`, which fails with `assert 0 == 1` before
+the conftest change) was the thing that actually resolved it, and that instinct
+came from the process, not the tool.
+
+**What would you do differently if you started over?**
+Three things. First, I'd write the RED probe test on day one instead of during
+implementation week — I spent Week 8 reasoning about the mechanism in prose in
+PLAN.md when a ten-line failing test would have proven the same thing in five
+minutes and given me a pass/fail signal to iterate against. Second, I'd capture
+the baseline failure/lint counts immediately after cloning and paste them into
+PLAN.md, so I'd never again have the "did I break 52 tests?" panic. Third, I'd
+sort out the GitHub CLI auth *before* submission night. Because it failed, I
+opened PR #596 manually through the web UI and pasted the template without
+filling it in, which means a reviewer's first impression of my work is an empty
+"Closes #" and an empty Changes list — a bad framing for a fix whose whole value
+is in the reasoning behind it.
+
+**What are you most proud of from this module?**
+The RED/GREEN evidence trail. `tests/unit/test_logging_config.py` creates a
+logger at import time, asserts that exactly one INFO `LogRecord` reaches
+`caplog` containing both the event name and its structured `routing_probe`
+field, and it demonstrably failed before the conftest change and passes after.
+Alongside it, the canonical
+`test_batch_processor.py::TestBatchEmbeddingProcessor::test_empty_chunks_list_returns_empty`
+is completely untouched and now passes on its original assertions — which is the
+strongest possible argument that I fixed the harness rather than edited the test
+to agree with me. Anyone can read that diff and verify the claim without taking
+my word for anything. That's a higher bar than I've held my own projects to.
